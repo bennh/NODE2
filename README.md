@@ -22,10 +22,9 @@ project1_pyridine/
 ├── results/                        # 存放运行结果、图表
 ├── environment.yml                 # conda环境定义
 └── README.md                       # 项目说明文档
-
+<img width="646" alt="Screenshot 2025-05-12 at 14 51 47" src="https://github.com/user-attachments/assets/8ffed20b-9eb2-420d-ada2-9ed2e32d435e" />
 
 ## 项目实施顺序
-
 1. **环境搭建与基础模块实现**  
    - 环境安装 (`environment.yml`)  
    - `dynamics.py` 和 `multiple_shooting.py` 基本实现
