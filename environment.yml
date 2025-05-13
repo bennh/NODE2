@@ -1,0 +1,13 @@
+name: node2
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - numpy
+  - scipy
+  - matplotlib
+  - pip
+  - pip:
+    - casadi==3.7.0
+    - qpoases==3.2.1
+  - jupyterlab
