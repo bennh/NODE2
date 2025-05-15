@@ -1,5 +1,6 @@
 import numpy as np
 import casadi as ca
+import matplotlib.pyplot as plt
 from typing import Callable, List, Tuple
 from cnlls_solver import solve_cnlls_ipopt, solve_cnlls_gauss_newton
 
@@ -88,10 +89,10 @@ def simulate_lv_data(x0, p_true, t_grid):
 
 
 if __name__ == '__main__':
-    N = 20
+    N = 50
     nx = 2
     np_p = 4
-    T = 5.0
+    T = 10.0
     t_grid = np.linspace(0, T, N + 1)
     dt = t_grid[1] - t_grid[0]
 
@@ -105,16 +106,11 @@ if __name__ == '__main__':
     w, X_end, g, S_vars, P_var = setup_multiple_shooting(F, N, nx, np_p)
 
     # 目标函数 = 拟合误差平方和
-    F1 = ca.vertcat(*[X_end[i] - y_meas[i+1] for i in range(N)])
-
+    F1 = ca.vertcat(*[X_end[i] - y_meas[i + 1] for i in range(N)])
 
     # 创建 NLP 求解器
     # 初始值设置（x, p）
-    w0 = np.concatenate([y_meas[:-1].reshape(-1), np.array([1.5, 1.0, 1.0, 0.5])])
-    lbx = -np.inf * np.ones_like(w0)
-    ubx = np.inf * np.ones_like(w0)
-    lbg = np.zeros(g.shape[0])
-    ubg = np.zeros(g.shape[0])
+    w0 = np.concatenate([y_meas[:-1].reshape(-1), np.array([1.0, 1.0, 1.0, 0.5])])
 
     # sol_ipopt = solve_cnlls_ipopt(
     #     w=w,
@@ -138,3 +134,24 @@ if __name__ == '__main__':
     p_est_gn = w_opt_gn[-4:]  # 最后 4 个是参数
     print("Gauss-Newton estimated parameters:", p_est_gn)
 
+    # 用拟合参数重新模拟轨迹
+    y_est_gn = simulate_lv_data(y_meas[0], p_est_gn, t_grid)
+
+    # 单图展示 Prey 和 Predator 轨迹
+    plt.figure(figsize=(8, 5))
+
+    # 真实测量数据（圆点）
+    plt.plot(t_grid, y_meas[:, 0], 'o', label='Measured Prey', alpha=0.6)
+    plt.plot(t_grid, y_meas[:, 1], 's', label='Measured Predator', alpha=0.6)
+
+    # 用拟合参数重新模拟的轨迹（实线）
+    plt.plot(t_grid, y_est_gn[:, 0], '-', label='Estimated Prey', linewidth=2)
+    plt.plot(t_grid, y_est_gn[:, 1], '--', label='Estimated Predator', linewidth=2)
+
+    plt.xlabel('Time')
+    plt.ylabel('Population')
+    plt.title('Prey and Predator Dynamics')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
