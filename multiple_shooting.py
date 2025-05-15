@@ -96,20 +96,20 @@ if __name__ == '__main__':
     t_grid = np.linspace(0, T, N + 1)
     dt = t_grid[1] - t_grid[0]
 
-    # 真实参数
+    # True parameters
     p_true = np.array([2.0, 1.0, 1.5, 0.75])
     x0_true = np.array([2.0, 1.0])
     y_meas = simulate_lv_data(x0_true, p_true, t_grid)
 
-    # 构造 integrator 和 multiple shooting 问题
+    # Construct integrator and multiple shooting
     F = make_lv_integrator(dt)
     w, X_end, g, S_vars, P_var = setup_multiple_shooting(F, N, nx, np_p)
 
-    # 目标函数 = 拟合误差平方和
+    # F1 = 拟合误差平方和
     F1 = ca.vertcat(*[X_end[i] - y_meas[i + 1] for i in range(N)])
 
-    # 创建 NLP 求解器
-    # 初始值设置（x, p）
+    # Create NLP solvers
+    # Initial values（x, p）
     w0 = np.concatenate([y_meas[:-1].reshape(-1), np.array([1.0, 1.0, 1.0, 0.5])])
 
     # sol_ipopt = solve_cnlls_ipopt(
@@ -137,14 +137,13 @@ if __name__ == '__main__':
     # 用拟合参数重新模拟轨迹
     y_est_gn = simulate_lv_data(y_meas[0], p_est_gn, t_grid)
 
-    # 单图展示 Prey 和 Predator 轨迹
     plt.figure(figsize=(8, 5))
 
-    # 真实测量数据（圆点）
+    # Measured values（dots）
     plt.plot(t_grid, y_meas[:, 0], 'o', label='Measured Prey', alpha=0.6)
     plt.plot(t_grid, y_meas[:, 1], 's', label='Measured Predator', alpha=0.6)
 
-    # 用拟合参数重新模拟的轨迹（实线）
+    # Use datas from sym models（lines）
     plt.plot(t_grid, y_est_gn[:, 0], '-', label='Estimated Prey', linewidth=2)
     plt.plot(t_grid, y_est_gn[:, 1], '--', label='Estimated Predator', linewidth=2)
 
