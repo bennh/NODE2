@@ -1,5 +1,6 @@
 import casadi as ca
 
+
 def create_integrator(nx: int, np_p: int, ode_rhs, dt: float):
     """
     Create a CasADi CVODES integrator for an ODE system.
@@ -28,29 +29,34 @@ def create_integrator(nx: int, np_p: int, ode_rhs, dt: float):
     return ca.integrator('integrator', 'cvodes', dae, opts)
 
 
-def pyridine_ode(x: ca.MX, p: ca.MX) -> ca.MX:
-    """
-    Example Pyridine reaction ODE.
+def make_lv_integrator(dt):
+    x = ca.MX.sym('x', 2)
+    p = ca.MX.sym('p', 4)  # [alpha, beta, gamma, delta]
 
-    State variables:
-      x[0] = [Pyridine] (C_py)
-      x[1] = [Ammonia]  (C_nh3)
-      x[2] = [Pentane]  (C_pent)
+    alpha, beta, gamma, delta = p[0], p[1], p[2], p[3]
+    f = ca.vertcat(
+        alpha * x[0] - beta * x[0] * x[1],
+        delta * x[0] * x[1] - gamma * x[1]
+    )
 
-    Parameters:
-      p[0] = k1
-      p[1] = k2
+    dae = {'x': x, 'p': p, 'ode': f}
+    return ca.integrator('F', 'cvodes', dae, {'tf': dt})
 
-    Returns:
-    -------
-    dx : MX(3×1)
-        Time derivatives of [C_py, C_nh3, C_pent]
-    """
-    C_py, C_nh3, C_pent = x[0], x[1], x[2]
-    k1, k2 = p[0], p[1]
-    v1 = k1 * C_py        # Pyridine → Ammonia
-    v2 = k2 * C_nh3       # Ammonia → Pentane
-    dC_py   = -v1
-    dC_nh3  =  v1 - v2
-    dC_pent =        v2
-    return ca.vertcat(dC_py, dC_nh3, dC_pent)
+
+def make_pyridine_integrator(dt):
+    y = ca.MX.sym("y", 7)
+    p = ca.MX.sym("p", 11)
+    A, B, C, D, E, F, G = y[0], y[1], y[2], y[3], y[4], y[5], y[6]
+    p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11 = ca.vertsplit(p)
+
+    dy = ca.MX(7, 1)
+    dy[0] = -p1 * A + p9 * B
+    dy[1] = p1 * A - p2 * B - p3 * B * C + p7 * D - p9 * B + p10 * D * F
+    dy[2] = p2 * B - p3 * B * C - 2 * p4 * C * C - p6 * C + p8 * E + p10 * D * F + 2 * p11 * E * F
+    dy[3] = p3 * B * C - p5 * D - p7 * D - p10 * D * F
+    dy[4] = p4 * C * C + p5 * D - p8 * E - p11 * E * F
+    dy[5] = p3 * B * C + p4 * C * C + p6 * C - p10 * D * F - p11 * E * F
+    dy[6] = p6 * C + p7 * D + p8 * E
+
+    dae = {'x': y, 'p': p, 'ode': dy}
+    return ca.integrator("F", "rk", dae, {'tf': dt})
