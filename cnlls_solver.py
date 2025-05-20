@@ -91,9 +91,14 @@ def solve_cnlls_gauss_newton(w: ca.MX,
         - 'iterations': int, number of iterations used.
         - 'converged': bool, whether tol was reached.
     """
+
+    F2 = ca.MX.zeros(0)
+    F3 = ca.MX.zeros(0)
+    g_total = ca.vertcat(g, F2, F3)
+                            
     # Create evaluation functions
     F1_fun = ca.Function('F1_fun', [w], [F1])
-    g_fun  = ca.Function('g_fun',  [w], [g])
+    g_fun  = ca.Function('g_fun',  [w], [g_total])
     J1_fun = ca.Function('J1_fun', [w], [ca.jacobian(F1, w)])
     J2_fun = ca.Function('J2_fun', [w], [ca.jacobian(g,  w)])
 
