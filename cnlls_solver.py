@@ -149,9 +149,17 @@ def solve_cnlls_gauss_newton(w: ca.MX,
 
         dw_opt = sol_qp['x'].full().flatten()
 
-        # Update iterate
-        xk = xk + dw_opt
-        if np.linalg.norm(dw_opt) < tol:
+        res_norm = np.linalg.norm(r)  
+        alpha = 1.0
+        while True:
+            xk_new = xk + alpha * dw_opt
+            r_new = F1_fun(xk_new).full().flatten()  
+            if np.linalg.norm(r_new) <= res_norm or alpha < 1e-3:
+                xk = xk_new
+                break
+            alpha *= 0.5
+
+        if np.linalg.norm(alpha * dw_opt) < tol:
             converged = True
             break
 
