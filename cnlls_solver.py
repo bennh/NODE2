@@ -6,6 +6,7 @@ def solve_cnlls_ipopt(w: ca.MX,
                       F1: ca.MX,
                       g: ca.MX,
                       w0: np.ndarray,
+                      n_params: int = 11,
                       opts: dict = None) -> dict:
     """
     Solve a constrained nonlinear least-squares problem via IPOPT.
@@ -39,9 +40,14 @@ def solve_cnlls_ipopt(w: ca.MX,
         'f': 0.5 * ca.sumsqr(F1),
         'g': g
     }
+
+    lbw = np.zeros(w.size1())
+    # lbw[-n_params:] = 1e-8
+    ubw = np.inf * np.ones(w.size1())
+
     solver_opts = opts if opts is not None else {}
     solver = ca.nlpsol('solver', 'ipopt', nlp, solver_opts)
-    sol = solver(x0=w0, lbg=np.zeros(g.size1()), ubg=np.zeros(g.size1()))
+    sol = solver(x0=w0, lbg=np.zeros(g.size1()), ubg=np.zeros(g.size1()), lbx=lbw, ubx=ubw)
     w_opt = sol['x'].full().flatten()
     return {
         'x': w_opt,
@@ -52,12 +58,13 @@ def solve_cnlls_ipopt(w: ca.MX,
 
 
 def solve_cnlls_gauss_newton(w: ca.MX,
-                              F1: ca.MX,
-                              g: ca.MX,
-                              w0: np.ndarray,
-                              max_iter: int = 20,
-                              tol: float = 1e-6,
-                              qp_opts: dict = None) -> dict:
+                             F1: ca.MX,
+                             g: ca.MX,
+                             w0: np.ndarray,
+                             n_params: int = 11,
+                             max_iter: int = 30,
+                             tol: float = 1e-8,
+                             qp_opts: dict = None) -> dict:
     """
     Solve a constrained nonlinear least-squares problem via Generalized Gauss-Newton.
 
@@ -91,16 +98,11 @@ def solve_cnlls_gauss_newton(w: ca.MX,
         - 'iterations': int, number of iterations used.
         - 'converged': bool, whether tol was reached.
     """
-
-    F2 = ca.MX.zeros(0)
-    F3 = ca.MX.zeros(0)
-    g_total = ca.vertcat(g, F2, F3)
-                            
     # Create evaluation functions
     F1_fun = ca.Function('F1_fun', [w], [F1])
-    g_fun  = ca.Function('g_fun',  [w], [g_total])
+    g_fun = ca.Function('g_fun', [w], [g])
     J1_fun = ca.Function('J1_fun', [w], [ca.jacobian(F1, w)])
-    J2_fun = ca.Function('J2_fun', [w], [ca.jacobian(g,  w)])
+    J2_fun = ca.Function('J2_fun', [w], [ca.jacobian(g, w)])
 
     xk = w0.copy()
     n = w.size1()
@@ -108,33 +110,156 @@ def solve_cnlls_gauss_newton(w: ca.MX,
 
     for k in range(max_iter):
         # Evaluate residuals and Jacobians
-        r = F1_fun(xk).full().flatten()         # m1
-        h = g_fun(xk).full().flatten()          # m2
-        J1 = J1_fun(xk).full()                  # m1 x n
-        J2 = J2_fun(xk).full()                  # m2 x n
-        
+        r = F1_fun(xk).full().flatten()  # m1
+        h = g_fun(xk).full().flatten()  # m2
+        J1 = J1_fun(xk).full()  # m1 x n
+        J2 = J2_fun(xk).full()  # m2 x n
+
+        lbx = np.concatenate([
+            -np.inf * np.ones(n - 11),
+            np.zeros(11)
+        ])
+        ubx = np.full(n, np.inf)
+
         # Build QP matrices
-        H = J1.T @ J1                          # n x n
-        c = J1.T @ r                           # n
+        H = J1.T @ J1  # n x n
+
+        # LM 阻尼
+        # mu = 0.1
+        # H = J1.T @ J1 + mu * np.eye(n)
+        c = J1.T @ r  # n
         # Define QP variable dw
         dw = ca.MX.sym('dw', n)
         qp = {
             'x': dw,
-            'f': 0.5 * ca.mtimes([dw.T, H, dw]) + c.T @ dw,
+            'f': 0.5 * ca.mtimes([dw.T, H, dw]) + ca.dot(c.T, dw),
             'g': J2 @ dw + h
         }
         qp_solver = ca.qpsol('qp_solver', 'qpoases', qp, qp_opts or {})
-        sol_qp = qp_solver(lbg=np.zeros(h.size), ubg=np.zeros(h.size))
+        sol_qp = qp_solver(lbg=np.zeros(h.size), ubg=np.zeros(h.size), lbx=lbx, ubx=ubx)
         dw_opt = sol_qp['x'].full().flatten()
-        
+
+        # 回退线搜索
+        alpha = 1.0
+        while alpha > 1e-6:
+            trial_x = xk + alpha * dw_opt
+            if np.linalg.norm(F1_fun(trial_x).full()) ** 2 < np.linalg.norm(F1_fun(xk).full()) ** 2:
+                break
+            alpha *= 0.5
+        xk = xk + alpha * dw_opt
+
         # Update
-        xk = xk + dw_opt
+        # xk = xk + dw_opt
         if np.linalg.norm(dw_opt) < tol:
             converged = True
             break
 
     return {
         'x': xk,
-        'iterations': k+1,
+        'iterations': k + 1,
         'converged': converged
     }
+
+
+def solve_cnlls_gauss_newton_logparam(
+        w: ca.MX,
+        F1: ca.MX,
+        g: ca.MX,
+        w0: np.ndarray,
+        n_params: int = 11,
+        max_iter: int = 30,
+        tol: float = 1e-8,
+        qp_opts: dict = None
+) -> dict:
+    """
+    Gauss-Newton with log-parameter reparametrization.
+    The last `n_params` entries of w are parameters p = exp(q).
+    """
+
+    # 维度
+    n_total = w.size1()
+    n_var = n_total - n_params  # 非参数分量数
+
+    # 符号变量：s for states, q for log-parameters
+    s = ca.MX.sym('s', n_var)
+    q = ca.MX.sym('q', n_params)
+    # 重构原始 w = [s; exp(q)]
+    w_reparam = ca.vertcat(s, ca.exp(q))
+
+    # 在 F1, g 中替换 w -> [s; exp(q)]
+    F1_r = ca.substitute(F1, w, w_reparam)
+    g_r = ca.substitute(g, w, w_reparam)
+
+    # 构造对应的 CasADi 函数
+    v = ca.vertcat(s, q)
+    F1_fun = ca.Function('F1_fun', [v], [F1_r])
+    g_fun = ca.Function('g_fun', [v], [g_r])
+    J1_fun = ca.Function('J1_fun', [v], [ca.jacobian(F1_r, v)])
+    J2_fun = ca.Function('J2_fun', [v], [ca.jacobian(g_r, v)])
+
+    # 初始值：拆分 w0 → s0, p0 → q0 = log(p0)
+    s0 = w0[:n_var]
+    p0 = w0[n_var:]
+    w0 = np.concatenate([s0, np.log(p0)])
+
+    converged = False
+    for k in range(max_iter):
+        # 评估残差与雅可比
+        r = F1_fun(w0).full().flatten()  # m1
+        h = g_fun(w0).full().flatten()  # m2
+        J1 = J1_fun(w0).full()  # m1 x n
+        J2 = J2_fun(w0).full()  # m2 x n
+
+        # 构造 QP
+        # H = J1.T @ J1
+
+        # LM 阻尼
+        mu = 0.0001
+        H = J1.T @ J1 + mu * np.eye(n_total)
+        c = J1.T @ r
+
+        dv = ca.MX.sym('dv', n_total)
+
+        lam_reg = 0.0001
+        reg = lam_reg / 2 * ca.sumsqr((w0[n_var:] + dv[n_var:]) - np.log(p0))
+
+        qp = {
+            'x': dv,
+            'f': 0.5 * ca.mtimes([dv.T, H, dv]) + ca.dot(c.T, dv) + reg,
+            'g': J2 @ dv + h
+        }
+        qp_solver = ca.qpsol('qp_solver', 'qpoases', qp, qp_opts or {})
+
+        lbx = -np.inf * np.ones(n_total)
+        ubx = np.inf * np.ones(n_total)
+
+        sol = qp_solver(
+            x0=np.zeros(n_total),
+            lbg=np.zeros(h.size), ubg=np.zeros(h.size),
+            lbx=lbx, ubx=ubx
+        )
+        dv_opt = sol['x'].full().flatten()
+
+        # 回退线搜索
+        alpha = 1.0
+        f0 = np.linalg.norm(r) ** 2
+        while alpha > 1e-6:
+            v_trial = w0 + alpha * dv_opt
+            f_trial = np.linalg.norm(F1_fun(v_trial).full().flatten()) ** 2
+            if f_trial < f0:
+                break
+            alpha *= 0.8
+
+        # 更新
+        w0 = w0 + alpha * dv_opt
+        if np.linalg.norm(dv_opt) < tol:
+            converged = True
+            break
+
+    # 恢复 w = [s; p]，p = exp(q)
+    s_opt = w0[:n_var]
+    q_opt = w0[n_var:]
+    p_opt = np.exp(q_opt)
+    w_opt = np.concatenate([s_opt, p_opt])
+
+    return {'x': w_opt, 'iterations': k + 1, 'converged': converged}
