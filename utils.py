@@ -1,5 +1,6 @@
 import numpy as np
 import casadi as ca
+import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from typing import Tuple
 
@@ -94,3 +95,19 @@ def evaluate_fit(y_true: np.ndarray, y_pred: np.ndarray, t_grid: np.ndarray, lab
         rmse = np.sqrt(mean_squared_error(y_true[:, i], y_pred[:, i]))
         mae  = mean_absolute_error(   y_true[:, i], y_pred[:, i])
         print(f"{species}: RMSE = {rmse:.4f}, MAE = {mae:.4f}")
+
+def plot_fit(y_true: np.ndarray, y_pred: np.ndarray, t_grid: np.ndarray, title: str = "Fit vs True"):
+    species_names = ['Pyridin', 'Piperidin', 'Pentylamin', 'N-Pentylpiperidin',
+                     'Dipentylamin', 'Ammonia', 'Pentan']
+    nx = y_true.shape[1]
+    fig, axes = plt.subplots(nx, 1, figsize=(10, 2.5 * nx))
+    for i in range(nx):
+        axes[i].plot(t_grid, y_true[:, i], 'o-', label='Measurements')
+        axes[i].plot(t_grid, y_pred[:, i], '--', label='Estimate')
+        axes[i].set_ylabel(species_names[i])
+        axes[i].legend()
+        axes[i].grid(True)
+    axes[-1].set_xlabel("Time")
+    fig.suptitle(title)
+    plt.tight_layout()
+    plt.show()
