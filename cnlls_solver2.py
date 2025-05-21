@@ -1,6 +1,62 @@
 import casadi as ca
 import numpy as np
 
+def solve_cnlls_ipopt(w: ca.MX,
+                      F1: ca.MX,
+                      g: ca.MX,
+                      w0: np.ndarray,
+                      n_params: int = 11,
+                      opts: dict = None) -> dict:
+    """
+    Solve a constrained nonlinear least-squares problem via IPOPT.
+
+    Minimize 0.5*||F1(w)||^2 subject to g(w) = 0.
+
+    Parameters:
+    ----------
+    w : casadi.MX
+        Decision variable vector.
+    F1 : casadi.MX
+        Residual vector (to be squared).
+    g : casadi.MX
+        Constraint vector (equality constraints g(w)=0).
+    w0 : numpy.ndarray
+        Initial guess for w (length = w.size1()).
+    opts : dict, optional
+        IPOPT solver options.
+
+    Returns:
+    -------
+    sol : dict
+        Dictionary with keys:
+        - 'x': numpy.ndarray, the optimal w.
+        - 'f': final objective value.
+        - 'g': final constraint violation.
+        - 'ipopt': the raw IPOPT result object.
+    """
+    nlp = {
+        'x': w,
+        'f': 0.5 * ca.sumsqr(F1),
+        'g': g
+    }
+
+    lbw = np.zeros(w.size1())
+    # lbw[-n_params:] = 1e-8
+    ubw = np.inf * np.ones(w.size1())
+
+    solver_opts = opts if opts is not None else {}
+    solver = ca.nlpsol('solver', 'ipopt', nlp, solver_opts)
+    sol = solver(x0=w0, lbg=np.zeros(g.size1()), ubg=np.zeros(g.size1()), lbx=lbw, ubx=ubw)
+    w_opt = sol['x'].full().flatten()
+    return {
+        'x': w_opt,
+        'f': float(sol['f']),
+        'g': sol['g'].full().flatten(),
+        'ipopt': sol
+    }
+
+
+
 def solve_cnlls_gauss_newton(w: ca.MX,
                               F1: ca.MX,
                               g: ca.MX,
