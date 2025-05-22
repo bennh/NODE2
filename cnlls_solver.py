@@ -124,10 +124,11 @@ def solve_cnlls_gauss_newton(w: ca.MX,
         # Build QP matrices
         H = J1.T @ J1  # n x n
 
-        # LM 阻尼
-        mu = 1e-4  # 或问题特定适合的数值
+        # LM damping
+        mu = 1e-4  # or problem-specific suitable value
         H = J1.T @ J1 + mu * np.eye(n)
         c = J1.T @ r  # n
+
         # Define QP variable dw
         dw = ca.MX.sym('dw', n)
         qp = {
@@ -139,7 +140,7 @@ def solve_cnlls_gauss_newton(w: ca.MX,
         sol_qp = qp_solver(lbg=np.zeros(h.size), ubg=np.zeros(h.size), lbx=lbx, ubx=ubx)
         dw_opt = sol_qp['x'].full().flatten()
 
-        # 回退线搜索
+        # Backtracking line search
         alpha = 1.0
         while alpha > 1e-6:
             trial_x = xk + alpha * dw_opt
@@ -148,8 +149,6 @@ def solve_cnlls_gauss_newton(w: ca.MX,
             alpha *= 0.5
         xk = xk + alpha * dw_opt
 
-        # Update
-        # xk = xk + dw_opt
         if np.linalg.norm(dw_opt) < tol:
             converged = True
             break
@@ -176,50 +175,48 @@ def solve_cnlls_gauss_newton_logparam(
     The last `n_params` entries of w are parameters p = exp(q).
     """
 
-    # 维度
+    # Dimensions
     n_total = w.size1()
-    n_var = n_total - n_params  # 非参数分量数
+    n_var = n_total - n_params  # number of non-parameter variables
 
-    # 符号变量：s for states, q for log-parameters
+    # Symbolic variables: s for states, q for log-parameters
     s = ca.MX.sym('s', n_var)
     q = ca.MX.sym('q', n_params)
-    # 重构原始 w = [s; exp(q)]
+    # Reconstruct original w = [s; exp(q)]
     w_reparam = ca.vertcat(s, ca.exp(q))
 
-    # 在 F1, g 中替换 w -> [s; exp(q)]
+    # Substitute w -> [s; exp(q)] in F1 and g
     F1_r = ca.substitute(F1, w, w_reparam)
     g_r = ca.substitute(g, w, w_reparam)
 
-    # 构造对应的 CasADi 函数
+    # Create corresponding CasADi functions
     v = ca.vertcat(s, q)
     F1_fun = ca.Function('F1_fun', [v], [F1_r])
     g_fun = ca.Function('g_fun', [v], [g_r])
     J1_fun = ca.Function('J1_fun', [v], [ca.jacobian(F1_r, v)])
     J2_fun = ca.Function('J2_fun', [v], [ca.jacobian(g_r, v)])
 
-    # 初始值：拆分 w0 → s0, p0 → q0 = log(p0)
+    # Initial guess: split w0 → s0, p0 → q0 = log(p0)
     s0 = w0[:n_var]
     p0 = w0[n_var:]
     w0 = np.concatenate([s0, np.log(p0)])
 
     converged = False
     for k in range(max_iter):
-        # 评估残差与雅可比
+        # Evaluate residuals and Jacobians
         r = F1_fun(w0).full().flatten()  # m1
         h = g_fun(w0).full().flatten()  # m2
         J1 = J1_fun(w0).full()  # m1 x n
         J2 = J2_fun(w0).full()  # m2 x n
 
-        # 构造 QP
-        # H = J1.T @ J1
-
-        # LM 阻尼
+        # LM damping
         mu = 0.0001
         H = J1.T @ J1 + mu * np.eye(n_total)
         c = J1.T @ r
 
         dv = ca.MX.sym('dv', n_total)
 
+        # Regularization on log-parameter
         lam_reg = 1e-5
         reg = lam_reg / 2 * ca.sumsqr((w0[n_var:] + dv[n_var:]) - np.log(p0))
 
@@ -240,7 +237,7 @@ def solve_cnlls_gauss_newton_logparam(
         )
         dv_opt = sol['x'].full().flatten()
 
-        # 回退线搜索
+        # Backtracking line search
         alpha = 1.0
         f0 = np.linalg.norm(r) ** 2
         while alpha > 1e-6:
@@ -250,13 +247,13 @@ def solve_cnlls_gauss_newton_logparam(
                 break
             alpha *= 0.5
 
-        # 更新
+        # Update
         w0 = w0 + alpha * dv_opt
         if np.linalg.norm(dv_opt) < tol:
             converged = True
             break
 
-    # 恢复 w = [s; p]，p = exp(q)
+    # Recover w = [s; p], with p = exp(q)
     s_opt = w0[:n_var]
     q_opt = w0[n_var:]
     p_opt = np.exp(q_opt)
