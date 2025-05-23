@@ -20,5 +20,5 @@ NODE2_1/
 ├── notorious.py                # Section 6 example: Notorious ODE benchmark
 ├── utils.py                    # Utilities for noise, plotting, measurement simulation
 │
-├── demo_pyridine.ipynb         # Notebook for full Pyridine parameter estimation demo
-└── demo_notorious.ipynb        # Notebook for Notorious test case demo
+├── demo.ipynb                  # Notebook for full Pyridine parameter estimation and Notorious test case demo
+│
