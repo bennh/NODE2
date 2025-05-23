@@ -1,4 +1,4 @@
-# NODE2_1 Project: Constrained Nonlinear Least Squares via Direct Multiple Shooting
+# NODE2 Project: Constrained Nonlinear Least Squares via Direct Multiple Shooting
 
 ## Overview
 
