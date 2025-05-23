@@ -102,3 +102,27 @@ Notebook demo:
 * Verified two solvers: IPOPT (with `F3`) and GN-logparam (without explicit constraints)
 * All modules are cleanly modularized and reusable
 * Ideal baseline for dynamic system parameter estimation in chemical/biological modeling
+
+---
+
+## Appendix: Authors and Contributions
+
+This project was collaboratively developed as part of the course *Numerical Optimization with Differential Equations II* (Summer Semester 2025, Heidelberg University). Contributions are divided as follows:
+
+- **Fan, Siqing**  
+  Model enhancement and parameterization, responsible for:
+  - Log-parametrization in Gauss-Newton
+  - Pyridine system modeling and simulation (`pyridine.py`)
+  - Synthetic noise generation and residual-based objective construction (`utils.py`)
+
+- **Li, Yuefeiyang**  
+  Developer of the CNLLS optimization components, including:
+  - IPOPT-based solver for constrained problems
+  - Gauss-Newton method with equality constraints (`cnlls_solver.py`)
+  - Task coordination across modules
+
+- **Zheng, Binheng**  
+  Architect of the overall framework structure, and:
+  - Direct Multiple Shooting implementation (`multiple_shooting.py`)
+  - Notorious test case modeling and integration (`notorious.py`)
+  - Final project integration and polishing
