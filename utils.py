@@ -162,6 +162,6 @@ def print_formatted_params(params: np.ndarray, mode: str = 'estimated'):
     """
     Format parameters for printing.
     """
-    label = "Estimated parameters" if mode == 'estimated' else "True      parameters"
+    label = "Estimated parameters" if mode == 'estimated' else "True parameters"
     formatted = " ".join(f"{x:.4f}" for x in params)
     print(f"{label}: {formatted}")
