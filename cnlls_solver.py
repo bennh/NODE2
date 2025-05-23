@@ -116,8 +116,13 @@ def solve_cnlls_gauss_newton(w: ca.MX,
         J1 = J1_fun(xk).full()
         J2 = J2_fun(xk).full()
 
-        H = J1.T @ J1 + 1e-4 * np.eye(n)
-        c = J1.T @ r
+        # Build QP matrices
+        H = J1.T @ J1  # n x n
+
+        # LM damping
+        mu = 1e-4  # or problem-specific suitable value
+        H = J1.T @ J1 + mu * np.eye(n)
+        c = J1.T @ r 
 
         dw = ca.MX.sym('dw', n)
         qp = {
@@ -130,6 +135,7 @@ def solve_cnlls_gauss_newton(w: ca.MX,
                            lbx=-np.inf * np.ones(n), ubx=np.inf * np.ones(n))
         dw_opt = sol_qp['x'].full().flatten()
 
+        # Backtracking line search
         alpha = 1.0
         while alpha > 1e-6:
             trial_x = xk + alpha * dw_opt
@@ -187,11 +193,17 @@ def solve_cnlls_gauss_newton_logparam(w: ca.MX,
         J1 = J1_fun(w0).full()
         J2 = J2_fun(w0).full()
 
-        H = J1.T @ J1 + 1e-4 * np.eye(n_total)
+        # LM damping
+        mu = 0.0001
+        H = J1.T @ J1 + mu * np.eye(n_total)
         c = J1.T @ r
 
         dv = ca.MX.sym('dv', n_total)
-        reg = 1e-5 / 2 * ca.sumsqr((w0[n_var:] + dv[n_var:]) - np.log(p0))
+        
+        # Regularization on log-parameter
+        lam_reg = 0.0001
+        reg = lam_reg / 2 * ca.sumsqr((w0[n_var:] + dv[n_var:]) - np.log(p0))
+
         qp = {
             'x': dv,
             'f': 0.5 * ca.mtimes([dv.T, H, dv]) + ca.dot(c.T, dv) + reg,
@@ -204,6 +216,7 @@ def solve_cnlls_gauss_newton_logparam(w: ca.MX,
                         lbx=-1e2 * np.ones(n_total), ubx=1e2 * np.ones(n_total))
         dv_opt = sol['x'].full().flatten()
 
+        # Backtracking line search
         alpha = 1.0
         f0 = np.linalg.norm(r) ** 2
         while alpha > 1e-6:
@@ -218,6 +231,7 @@ def solve_cnlls_gauss_newton_logparam(w: ca.MX,
             converged = True
             break
 
+    # Recover w = [s; p], with p = exp(q)
     s_opt = w0[:n_var]
     q_opt = w0[n_var:]
     p_opt = np.exp(q_opt)
