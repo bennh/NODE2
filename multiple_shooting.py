@@ -12,14 +12,29 @@ def setup_multiple_shooting(
     """
     Set up a direct multiple shooting discretization.
 
+    Parameters:
+    -----------
+    integrator           : ca.Function
+                           CasADi integrator function returning final state 'xf' for given x0 and p.
+    t_shooting           : sequence
+                           Shooting nodes, with length N+1 for N intervals.
+    nx                   : int
+                           Dimension of the state vector.
+    np_p                 : int
+                           Dimension of the parameter vector.
+    enforce_state_nonneg : bool, optional
+                           If True, adds inequality constraints s_i ≥ 0 for all shooting states.
+    enforce_param_nonneg : bool, optional
+                           If True, adds inequality constraints p ≥ 0 for parameters.
+
     Returns:
     --------
-    w     : MX          # Decision variable vector [s_0,...,s_{N-1}, p]
-    X_end: List[MX]     # End states for each interval
-    F2    : MX          # Equality constraints (continuity)
-    F3    : MX          # Inequality constraints (e.g., s_i ≥ 0, p ≥ 0)
-    S_vars: List[MX]    # Symbolic shooting state variables
-    P_var : MX          # Symbolic parameter vector
+    w       : MX          # Decision variable vector [s_0,...,s_{N-1}, p]
+    X_end   : List[MX]    # End states for each interval
+    F2      : MX          # Equality constraints (continuity)
+    F3      : MX          # Inequality constraints (e.g., s_i ≥ 0, p ≥ 0)
+    S_vars  : List[MX]    # Symbolic shooting state variables
+    P_var   : MX          # Symbolic parameter vector
     """
     N = len(t_shooting) - 1
     S_vars = [ca.MX.sym(f's_{i}', nx) for i in range(N)]
@@ -33,6 +48,7 @@ def setup_multiple_shooting(
         if i < N - 1:
             F2_terms.append(x_end - S_vars[i + 1])
 
+    # Equality constraints (continuity): x_end of interval i minus shooting state s_{i+1} equals zero
     F2 = ca.vertcat(*F2_terms) if F2_terms else ca.MX.zeros(0)
 
     # Decision vector
